@@ -94,30 +94,90 @@ export function Ta3Editor({ value, td2Protocol, onChange }: Ta3EditorProps) {
   }
 
   if (td2Protocol === 15) {
-    // T=15: TA3 encodes clock-stop indicator and class (raw, show as hex with bit breakdown)
+    // T=15: first TA encodes clock-stop indicator (b8 b7) and class indicator (b6..b1).
+    // ISO/IEC 7816-3:2006 §8.3:
+    //   b8 b7: 00 not supported, 01 state L, 10 state H, 11 no preference
+    //   b1 class A (5V), b2 class B (3V), b3 class C (1.8V), b4..b6 RFU
     const b = value ?? 0x00
+    const clockStop = (b >> 6) & 0x03
+    const classBits = b & 0x3f
+
+    const setClockStop = (cs: number) => onChange((classBits) | ((cs & 0x03) << 6))
+    const toggleClass = (bit: number) => onChange(((clockStop & 0x03) << 6) | (classBits ^ (1 << bit)))
+
+    const clockOptions = [
+      { v: 0, label: 'Not supported' },
+      { v: 1, label: 'State L' },
+      { v: 2, label: 'State H' },
+      { v: 3, label: 'No preference' },
+    ]
+    const classOptions = [
+      { bit: 0, label: 'A', volt: '5V' },
+      { bit: 1, label: 'B', volt: '3V' },
+      { bit: 2, label: 'C', volt: '1.8V' },
+    ]
+
     return (
       <div className="flex flex-col gap-3">
-        <div className="flex items-center gap-3">
-          <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Raw value (hex)</label>
-            <input
-              type="text"
-              value={b.toString(16).padStart(2, '0').toUpperCase()}
-              onChange={e => {
-                const v = parseInt(e.target.value, 16)
-                if (!isNaN(v) && v >= 0 && v <= 255) onChange(v)
-              }}
-              maxLength={2}
-              className="w-14 bg-secondary border border-border rounded px-2 py-1.5 text-sm font-mono text-foreground text-center focus:outline-none focus:ring-1 focus:ring-primary/60"
-            />
+        {/* Clock stop indicator — bits 8-7 */}
+        <div className="flex flex-col gap-1.5">
+          <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+            Clock stop — bits 8-7
+          </label>
+          <div className="flex flex-wrap gap-2">
+            {clockOptions.map(o => (
+              <label
+                key={o.v}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded border cursor-pointer text-xs font-mono transition-all ${
+                  clockStop === o.v
+                    ? 'border-primary/60 bg-primary/10 text-primary'
+                    : 'border-border bg-secondary/30 text-muted-foreground hover:border-border/60'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="ta3-clockstop"
+                  checked={clockStop === o.v}
+                  onChange={() => setClockStop(o.v)}
+                  className="sr-only"
+                />
+                {o.label}
+              </label>
+            ))}
           </div>
-          <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Binary</label>
-            <span className="text-xs font-mono text-muted-foreground bg-secondary/50 rounded px-2 py-1.5">
-              {b.toString(2).padStart(8, '0')}b
-            </span>
+        </div>
+
+        {/* Class indicator — bits 6-1 */}
+        <div className="flex flex-col gap-1.5">
+          <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+            Class accepted by the card — bits 3-1
+          </label>
+          <div className="flex flex-wrap gap-2">
+            {classOptions.map(o => (
+              <label
+                key={o.bit}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded border cursor-pointer text-xs font-mono transition-all ${
+                  (classBits >> o.bit) & 1
+                    ? 'border-primary/60 bg-primary/10 text-primary'
+                    : 'border-border bg-secondary/30 text-muted-foreground hover:border-border/60'
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  checked={((classBits >> o.bit) & 1) === 1}
+                  onChange={() => toggleClass(o.bit)}
+                  className="sr-only"
+                />
+                {o.label} <span className="text-[10px] text-muted-foreground ml-0.5">{o.volt}</span>
+              </label>
+            ))}
           </div>
+        </div>
+
+        <div className="bg-secondary/50 rounded px-3 py-2 flex items-center gap-2">
+          <span className="text-xs text-muted-foreground">TA byte:</span>
+          <span className="text-xs font-mono text-primary">{b.toString(16).padStart(2, '0').toUpperCase()}</span>
+          <span className="text-xs font-mono text-muted-foreground">= {b.toString(2).padStart(8, '0')}b</span>
         </div>
       </div>
     )
