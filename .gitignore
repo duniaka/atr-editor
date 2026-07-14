@@ -1,0 +1,14 @@
+# Environment variables
+.env*.local
+
+# Common ignores
+node_modules
+.next/
+.DS_Store
+# Claude / IDE
+.claude/
+.idea/
+tsconfig.tsbuildinfo
+
+# Static export output
+/out/
